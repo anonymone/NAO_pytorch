@@ -210,7 +210,75 @@ class Cell(nn.Module):
             out = self.ops[i](x, y, step)
             states.append(out)
         return self.final_combine(states)
+
+class NASNetworkMNIST(nn.Module):
+    def __init__(self, args, classes, layers, nodes, channels, keep_prob, drop_path_keep_prob, use_aux_head, steps, arch):
+        super(NASNetworkCIFAR, self).__init__()
+        self.args = args
+        self.classes = classes
+        self.layers = layers
+        self.nodes = nodes
+        self.channels = channels
+        self.keep_prob = keep_prob
+        self.drop_path_keep_prob = drop_path_keep_prob
+        self.use_aux_head = use_aux_head
+        self.steps = steps
+        if isinstance(arch, str):
+            arch = list(map(int, arch.strip().split()))
+        elif isinstance(arch, list) and len(arch) == 2:
+            arch = arch[0] + arch[1]
+        self.conv_arch = arch[:4 * self.nodes]
+        self.reduc_arch = arch[4 * self.nodes:]
+
+        self.pool_layers = [self.layers, 2 * self.layers + 1]
+        self.layers = self.layers * 3
         
+        if self.use_aux_head:
+            self.aux_head_index = self.pool_layers[-1] #+ 1
+        stem_multiplier = 3
+        channels = stem_multiplier * self.channels
+        self.stem = nn.Sequential(
+            nn.Conv2d(1, channels, 3, padding=1, bias=False),
+            nn.BatchNorm2d(channels)
+        )
+        outs = [[32, 32, channels],[32, 32, channels]]
+        channels = self.channels
+        self.cells = nn.ModuleList()
+        for i in range(self.layers+2):
+            if i not in self.pool_layers:
+                cell = Cell(self.conv_arch, outs, channels, False, i, self.layers+2, self.steps, self.drop_path_keep_prob)
+            else:
+                channels *= 2
+                cell = Cell(self.reduc_arch, outs, channels, True, i, self.layers+2, self.steps, self.drop_path_keep_prob)
+            self.cells.append(cell)
+            outs = [outs[-1], cell.out_shape]
+            
+            if self.use_aux_head and i == self.aux_head_index:
+                self.auxiliary_head = AuxHeadCIFAR(outs[-1][-1], classes)
+        
+        self.global_pooling = nn.AdaptiveAvgPool2d(1)
+        self.dropout = nn.Dropout(1 - self.keep_prob)
+        self.classifier = nn.Linear(outs[-1][-1], classes)
+        
+        self.init_parameters()
+    
+    def init_parameters(self):
+        for w in self.parameters():
+            if w.data.dim() >= 2:
+                nn.init.kaiming_normal_(w.data)
+    
+    def forward(self, input, step=None):
+        aux_logits = None
+        s0 = s1 = self.stem(input)
+        for i, cell in enumerate(self.cells):
+            s0, s1 = s1, cell(s0, s1, step)
+            if self.use_aux_head and i == self.aux_head_index and self.training:
+                aux_logits = self.auxiliary_head(s1)
+        out = s1
+        out = self.global_pooling(out)
+        out = self.dropout(out)
+        logits = self.classifier(out.view(out.size(0), -1))
+        return logits, aux_logits      
 
 class NASNetworkCIFAR(nn.Module):
     def __init__(self, args, classes, layers, nodes, channels, keep_prob, drop_path_keep_prob, use_aux_head, steps, arch):

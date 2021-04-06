@@ -812,6 +812,8 @@ def main():
         top_archs_perf = train_and_evaluate_top_on_cifar10(top_archs, train_queue, valid_queue)
     elif args.dataset == 'cifar100':
         top_archs_perf = train_and_evaluate_top_on_cifar100(top_archs, train_queue, valid_queue)
+    elif args.dataset == 'fashion-mnist':
+        top_archs_perf = train_and_evaluate_top_on_mnist(top_archs, train_queue, valid_queue)
     else:
         top_archs_perf = train_and_evaluate_top_on_imagenet(top_archs, train_queue, valid_queue)
     top_archs_sorted_indices = np.argsort(top_archs_perf)[::-1]

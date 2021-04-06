@@ -15,7 +15,7 @@ import torch.nn.functional as F
 from torch import Tensor
 import torchvision.datasets as dset
 import torch.backends.cudnn as cudnn
-from model import NASNetworkCIFAR
+from model import NASNetworkCIFAR, NASNetworkMNIST
 
 parser = argparse.ArgumentParser()
 
@@ -131,6 +131,44 @@ def build_cifar10(model_state_dict, optimizer_state_dict, **kwargs):
     if model_state_dict is not None:
         model.load_state_dict(model_state_dict)
     
+    # if torch.cuda.device_count() > 1:
+    #     logging.info("Use %d %s", torch.cuda.device_count(), "GPUs !")
+    #     model = nn.DataParallel(model)
+    model = model.cuda()
+
+    train_criterion = nn.CrossEntropyLoss().cuda()
+    eval_criterion = nn.CrossEntropyLoss().cuda()
+
+    optimizer = torch.optim.SGD(
+        model.parameters(),
+        args.lr_max,
+        momentum=0.9,
+        weight_decay=args.l2_reg,
+    )
+    if optimizer_state_dict is not None:
+        optimizer.load_state_dict(optimizer_state_dict)
+
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, float(args.epochs), args.lr_min, epoch)
+    return train_queue, valid_queue, model, train_criterion, eval_criterion, optimizer, scheduler
+
+def build_mnist(model_state_dict, optimizer_state_dict, **kwargs):
+    epoch = kwargs.pop('epoch')
+
+    train_transform, valid_transform = utils._data_transforms_mnist(args.cutout_size)
+    train_data = dset.FashionMNIST(root=args.data, train=True, download=True, transform=train_transform)
+    valid_data = dset.FashionMNIST(root=args.data, train=False, download=True, transform=valid_transform)
+    
+    train_queue = torch.utils.data.DataLoader(
+        train_data, batch_size=args.batch_size, shuffle=True, pin_memory=True, num_workers=16)
+    valid_queue = torch.utils.data.DataLoader(
+        valid_data, batch_size=args.eval_batch_size, shuffle=False, pin_memory=True, num_workers=16)
+
+    model = NASNetworkMNIST(args, 10, args.layers, args.nodes, args.channels, args.keep_prob, args.drop_path_keep_prob,
+                       args.use_aux_head, args.steps, args.arch)
+    logging.info("param size = %fMB", utils.count_parameters_in_MB(model))
+    if model_state_dict is not None:
+        model.load_state_dict(model_state_dict)
+    
     if torch.cuda.device_count() > 1:
         logging.info("Use %d %s", torch.cuda.device_count(), "GPUs !")
         model = nn.DataParallel(model)
@@ -150,7 +188,6 @@ def build_cifar10(model_state_dict, optimizer_state_dict, **kwargs):
 
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, float(args.epochs), args.lr_min, epoch)
     return train_queue, valid_queue, model, train_criterion, eval_criterion, optimizer, scheduler
-
 
 def build_cifar100(model_state_dict, optimizer_state_dict, **kwargs):
     epoch = kwargs.pop('epoch')
@@ -196,7 +233,8 @@ def main():
     if not torch.cuda.is_available():
         logging.info('No GPU found!')
         sys.exit(1)
-    
+
+    torch.cuda.set_device(2)
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed(args.seed)
