@@ -213,7 +213,7 @@ class Cell(nn.Module):
 
 class NASNetworkMNIST(nn.Module):
     def __init__(self, args, classes, layers, nodes, channels, keep_prob, drop_path_keep_prob, use_aux_head, steps, arch):
-        super(NASNetworkCIFAR, self).__init__()
+        super(NASNetworkMNIST, self).__init__()
         self.args = args
         self.classes = classes
         self.layers = layers
@@ -241,7 +241,7 @@ class NASNetworkMNIST(nn.Module):
             nn.Conv2d(1, channels, 3, padding=1, bias=False),
             nn.BatchNorm2d(channels)
         )
-        outs = [[32, 32, channels],[32, 32, channels]]
+        outs = [[28, 28, channels],[28, 28, channels]]
         channels = self.channels
         self.cells = nn.ModuleList()
         for i in range(self.layers+2):

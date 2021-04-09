@@ -22,15 +22,15 @@ parser = argparse.ArgumentParser()
 # Basic model parameters.
 parser.add_argument('--mode', type=str, default='train',
                     choices=['train', 'test'])
-parser.add_argument('--data', type=str, default='data/cifar10')
-parser.add_argument('--dataset', type=str, default='cifar10', choices=['cifar10, cifar100'])
+parser.add_argument('--data', type=str, default='data/mnist')
+parser.add_argument('--dataset', type=str, default='mnist', choices=['cifar10, cifar100'])
 parser.add_argument('--output_dir', type=str, default='models')
 parser.add_argument('--batch_size', type=int, default=128)
 parser.add_argument('--eval_batch_size', type=int, default=500)
 parser.add_argument('--epochs', type=int, default=600)
 parser.add_argument('--layers', type=int, default=6)
 parser.add_argument('--nodes', type=int, default=5)
-parser.add_argument('--channels', type=int, default=36)
+parser.add_argument('--channels', type=int, default=24)
 parser.add_argument('--cutout_size', type=int, default=None)
 parser.add_argument('--grad_bound', type=float, default=5.0)
 parser.add_argument('--lr_max', type=float, default=0.025)
@@ -111,6 +111,8 @@ def get_builder(dataset):
         return build_cifar10
     elif dataset == 'cifar100':
         return build_cifar100
+    elif dataset == 'mnist':
+        return build_mnist
     
 
 def build_cifar10(model_state_dict, optimizer_state_dict, **kwargs):
@@ -169,9 +171,6 @@ def build_mnist(model_state_dict, optimizer_state_dict, **kwargs):
     if model_state_dict is not None:
         model.load_state_dict(model_state_dict)
     
-    if torch.cuda.device_count() > 1:
-        logging.info("Use %d %s", torch.cuda.device_count(), "GPUs !")
-        model = nn.DataParallel(model)
     model = model.cuda()
 
     train_criterion = nn.CrossEntropyLoss().cuda()
@@ -234,7 +233,7 @@ def main():
         logging.info('No GPU found!')
         sys.exit(1)
 
-    torch.cuda.set_device(2)
+    torch.cuda.set_device(0)
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed(args.seed)

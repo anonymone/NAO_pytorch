@@ -50,7 +50,7 @@ def accuracy(output, target, topk=(1,)):
 
     res = []
     for k in topk:
-        correct_k = correct[:k].view(-1).float().sum(0)
+        correct_k = correct[:k].reshape(-1).float().sum(0)
         res.append(correct_k.mul_(100.0/batch_size))
     return res
 
@@ -81,7 +81,7 @@ def _data_transforms_mnist(cutout_size):
     CIFAR_STD = [0.24703233]
 
     train_transform = transforms.Compose([
-        transforms.RandomCrop(24, padding=4),
+        transforms.RandomCrop(32, padding=4),
         transforms.RandomHorizontalFlip(),
         transforms.ToTensor(),
         transforms.Normalize(CIFAR_MEAN, CIFAR_STD),
